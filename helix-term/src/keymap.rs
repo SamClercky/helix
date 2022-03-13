@@ -698,6 +698,8 @@ impl Default for Keymaps {
                 "b" => buffer_picker,
                 "s" => symbol_picker,
                 "S" => workspace_symbol_picker,
+                "x" => document_diagnostic_picker,
+                "X" => workspace_diagnostic_picker,
                 "a" => code_action,
                 "'" => last_picker,
                 "d" => { "Debug (experimental)" sticky=true

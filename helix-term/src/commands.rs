@@ -282,6 +282,8 @@ impl MappableCommand {
         buffer_picker, "Open buffer picker",
         symbol_picker, "Open symbol picker",
         workspace_symbol_picker, "Open workspace symbol picker",
+        workspace_diagnostic_picker, "Open diagnostic picker for all open files",
+        document_diagnostic_picker, "Open diagnostic picker for current file",
         last_picker, "Open last picker",
         prepend_to_line, "Insert at start of line",
         append_to_line, "Insert at end of line",

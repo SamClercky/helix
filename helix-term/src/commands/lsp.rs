@@ -1,13 +1,13 @@
 use helix_lsp::{
     block_on, lsp,
-    util::{lsp_pos_to_pos, lsp_range_to_range, range_to_lsp_range},
+    util::{lsp_pos_to_pos, lsp_range_to_range, pos_to_lsp_pos, range_to_lsp_range},
     OffsetEncoding,
 };
 
 use super::{align_view, push_jump, Align, Context, Editor};
 
 use helix_core::Selection;
-use helix_view::editor::Action;
+use helix_view::{editor::Action, Document, DocumentId};
 
 use crate::{
     compositor::{self, Compositor},
@@ -181,6 +181,66 @@ pub fn workspace_symbol_picker(cx: &mut Context) {
             }
         },
     )
+}
+
+fn get_diagnostics<'a>(
+    documents: impl Iterator<Item = (&'a DocumentId, &'a Document)>,
+) -> Vec<lsp::SymbolInformation> {
+    documents
+        .filter_map(|(_id, doc)| doc.language_server().map(|server| (doc, server)))
+        .flat_map(|(doc, language_server)| {
+            let offset_encoding = language_server.offset_encoding();
+
+            doc.diagnostics().iter().filter_map(move |diagnostic| {
+                if let Some(uri) = doc.url() {
+                    let start = pos_to_lsp_pos(doc.text(), diagnostic.range.start, offset_encoding);
+                    let end = pos_to_lsp_pos(doc.text(), diagnostic.range.end, offset_encoding);
+
+                    #[allow(deprecated)]
+                    Some(lsp::SymbolInformation {
+                        name: diagnostic.message.clone(),
+                        kind: lsp::SymbolKind::KEY,
+                        tags: None,
+                        deprecated: None,
+                        container_name: Some(diagnostic.message.clone()),
+                        location: lsp::Location {
+                            uri,
+                            range: lsp::Range::new(start, end),
+                        },
+                    })
+                } else {
+                    None
+                }
+            })
+        })
+        .collect()
+}
+
+fn open_diagnostic_picker(cx: &mut Context, diagnostics: Vec<lsp::SymbolInformation>) {
+    let doc = doc!(cx.editor);
+    let language_server = language_server!(cx.editor, doc);
+    let offset_encoding = language_server.offset_encoding();
+    let current_url = doc.url();
+
+    cx.callback(
+        async move { Ok(serde_json::Value::Null) },
+        move |_: &mut Editor,
+              compositor: &mut Compositor,
+              _: Option<Vec<lsp::SymbolInformation>>| {
+            let picker = sym_picker(diagnostics, current_url, offset_encoding);
+            compositor.push(Box::new(overlayed(picker)))
+        },
+    );
+}
+
+pub fn document_diagnostic_picker(cx: &mut Context) {
+    let diagnostics = get_diagnostics(std::iter::once((&DocumentId::default(), doc!(cx.editor))));
+    open_diagnostic_picker(cx, diagnostics);
+}
+
+pub fn workspace_diagnostic_picker(cx: &mut Context) {
+    let diagnostics = get_diagnostics(cx.editor.documents.iter());
+    open_diagnostic_picker(cx, diagnostics);
 }
 
 impl ui::menu::Item for lsp::CodeActionOrCommand {
