@@ -236,14 +236,14 @@ impl MappableCommand {
         extend_prev_long_word_start, "Extend to beginning of previous long word",
         extend_next_long_word_end, "Extend to end of next long word",
         extend_next_word_end, "Extend to end of next word",
-        find_till_char, "Move till next occurance of char",
-        find_next_char, "Move to next occurance of char",
-        extend_till_char, "Extend till next occurance of char",
-        extend_next_char, "Extend to next occurance of char",
-        till_prev_char, "Move till previous occurance of char",
-        find_prev_char, "Move to previous occurance of char",
-        extend_till_prev_char, "Extend till previous occurance of char",
-        extend_prev_char, "Extend to previous occurance of char",
+        find_till_char, "Move till next occurrence of char",
+        find_next_char, "Move to next occurrence of char",
+        extend_till_char, "Extend till next occurrence of char",
+        extend_next_char, "Extend to next occurrence of char",
+        till_prev_char, "Move till previous occurrence of char",
+        find_prev_char, "Move to previous occurrence of char",
+        extend_till_prev_char, "Extend till previous occurrence of char",
+        extend_prev_char, "Extend to previous occurrence of char",
         repeat_last_motion, "repeat last motion(extend_next_char, extend_till_char, find_next_char, find_till_char...)",
         replace, "Replace with new char",
         switch_case, "Switch (toggle) case",
@@ -382,7 +382,9 @@ impl MappableCommand {
         jump_view_down, "Jump to the split below",
         rotate_view, "Goto next window",
         hsplit, "Horizontal bottom split",
+        hsplit_new, "Horizontal bottom split scratch buffer",
         vsplit, "Vertical right split",
+        vsplit_new, "Vertical right split scratch buffer",
         wclose, "Close window",
         wonly, "Current window only",
         select_register, "Select register",
@@ -1843,17 +1845,20 @@ fn extend_line(cx: &mut Context) {
     let (view, doc) = current!(cx.editor);
 
     let text = doc.text();
-    let range = doc.selection(view.id).primary();
+    let selection = doc.selection(view.id).clone().transform(|range| {
+        let (start_line, end_line) = range.line_range(text.slice(..));
 
-    let (start_line, end_line) = range.line_range(text.slice(..));
-    let start = text.line_to_char(start_line);
-    let mut end = text.line_to_char((end_line + count).min(text.len_lines()));
+        let start = text.line_to_char(start_line);
+        let mut end = text.line_to_char((end_line + count).min(text.len_lines()));
 
-    if range.from() == start && range.to() == end {
-        end = text.line_to_char((end_line + count + 1).min(text.len_lines()));
-    }
+        // go to next line if current line is selected
+        if range.from() == start && range.to() == end {
+            end = text.line_to_char((end_line + count + 1).min(text.len_lines()));
+        }
+        Range::new(start, end)
+    });
 
-    doc.set_selection(view.id, Selection::single(start, end));
+    doc.set_selection(view.id, selection);
 }
 
 fn extend_to_line_bounds(cx: &mut Context) {
@@ -3704,7 +3709,7 @@ fn match_brackets(cx: &mut Context) {
         let text = doc.text().slice(..);
         let selection = doc.selection(view.id).clone().transform(|range| {
             if let Some(pos) =
-                match_brackets::find_matching_bracket_fuzzy(syntax, doc.text(), range.anchor)
+                match_brackets::find_matching_bracket_fuzzy(syntax, doc.text(), range.cursor(text))
             {
                 range.put_cursor(text, pos, doc.mode == Mode::Select)
             } else {
@@ -3793,8 +3798,16 @@ fn hsplit(cx: &mut Context) {
     split(cx, Action::HorizontalSplit);
 }
 
+fn hsplit_new(cx: &mut Context) {
+    cx.editor.new_file(Action::HorizontalSplit);
+}
+
 fn vsplit(cx: &mut Context) {
     split(cx, Action::VerticalSplit);
+}
+
+fn vsplit_new(cx: &mut Context) {
+    cx.editor.new_file(Action::VerticalSplit);
 }
 
 fn wclose(cx: &mut Context) {
